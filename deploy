@@ -1,0 +1,62 @@
+#!/bin/bash
+
+
+PROJECT_ID=data-science-radar
+ZONE=europe-west2-b
+PORT_PUB=80
+PORT_INT=80
+
+usage() {
+	echo "Usage:"
+	echo "	${0} -c CLUSTER"
+	exit 2
+}
+
+set_variable() {
+  local varname=$1
+  shift
+  if [ -z "${!varname}" ]; then
+    eval "export $varname=\"$@\""
+  else
+    echo "Error: $varname already set"
+    usage
+  fi
+}
+
+createCluster() {
+	if ! gcloud compute instances list 2>&1 | grep ${CLUSTER} > /dev/null 2>&1 ; then
+		echo "Creating Cluster"
+		gcloud container clusters create ${CLUSTER} --zone=${ZONE} --num-nodes=2
+		kubectl expose deployment ${APPNAME} --type=LoadBalancer --port ${PORT_PUB} --target-port ${PORT_INT}
+	else
+		echo "Cluster already exists"
+	fi
+
+}
+
+deployVersion() {
+	docker build -t gcr.io/${PROJECT_ID}/${APPNAME}:v${VERSION} .
+	docker push gcr.io/${PROJECT_ID}/${APPNAME}:v${VERSION}
+	if [ -n $UPDATE ]; then
+		kubectl set image deployment/${APPNAME} ${APPNAME}=gcr.io/${PROJECT_ID}/${APPNAME}:v${VERSION}
+	else
+		kubectl run ${APPNAME} --image gcr.io/${PROJECT_ID}/${APPNAME}:v${VERSION} --port ${PORT_INT}
+	fi
+	echo "App Deployed"
+	kubectl get pods
+}
+
+while getopts ":c:v:a:u?h" opt; do
+	case ${opt} in
+		c) set_variable CLUSTER $OPTARG ;;
+		v) set_variable VERSION $OPTARG ;;
+		a) set_variable APPNAME $OPTARG ;;
+		u) set_variable UPDATE $OPTARG ;;
+		h|?) usage ;;
+	esac
+done
+
+shift $((OPTIND -1))
+
+[[ -n "$CLUSTER" && "$APPNAME" ]] && createCluster 
+[[ -n "$VERSION" && "$APPNAME" ]] && deployVersion
