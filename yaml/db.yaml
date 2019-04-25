@@ -1,0 +1,55 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ajd-db
+spec:
+  selector:
+    app: ajd-db
+    tier: backend
+  ports:
+  - protocol: TCP
+    port: 3306
+    targetPort: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ajd-db
+spec:
+  selector:
+    matchLabels:
+      app: ajd-db
+      tier: backend
+      track: stable
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: ajd-db
+        tier: backend
+        track: stable
+    spec:
+      containers:
+        - name: ajd-db
+          image: "gcr.io/data-science-radar/ajd-db:v1"
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: eeteeTh6AeXecei4kea3
+            - name: MYSQL_DATABASE
+              value: staff
+            - name: MYSQL_USER
+              value: app
+            - name: MYSQL_PASSWORD
+              value: Ohchoo1keiv8iipha6Oo
+          args:
+             - "--ignore-db-dir=lost+found"
+          volumeMounts:
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-volumeclaim

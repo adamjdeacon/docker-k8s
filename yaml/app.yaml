@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ajd-app
+spec:
+  selector:
+    matchLabels:
+      app: ajd-app
+      tier: backend
+      track: stable
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: ajd-app
+        tier: backend
+        track: stable
+    spec:
+      containers:
+        - name: ajd-app
+          image: "gcr.io/data-science-radar/ajd-app:v9"
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                   fieldPath: metadata.name

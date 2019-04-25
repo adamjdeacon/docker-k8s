@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ajd-app
+spec:
+  selector:
+    app: ajd-app
+    tier: backend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: http
