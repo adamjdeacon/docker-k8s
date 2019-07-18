@@ -1,38 +1,39 @@
 apiVersion: v1
 kind: Service
 metadata:
-    name: ajd-web
+    name: ${PREFIX}${APPNAME}
 spec:
     selector:
-        app: ajd-web
+        app: ${PREFIX}${APPNAME}
         tier: frontend
     ports:
     - protocol: TCP
       port: 80
       targetPort: 80
     type: LoadBalancer
+    #externalTrafficPolicy: Local
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ajd-web
+  name: ${PREFIX}${APPNAME}
 spec:
   selector:
     matchLabels:
-      app: ajd-web
+      app: ${PREFIX}${APPNAME}
       tier: frontend
       track: stable
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
-        app: ajd-web
+        app: ${PREFIX}${APPNAME}
         tier: frontend
         track: stable
     spec:
       containers:
-        - name: ajd-web
-          image: "gcr.io/data-science-radar/ajd-web:v5"
+        - name: ${PREFIX}${APPNAME}
+          image: "gcr.io/${PROJECT_ID}/${PREFIX}${APPNAME}:${VERSION}"
           ports:
             - name: http
               containerPort: 80

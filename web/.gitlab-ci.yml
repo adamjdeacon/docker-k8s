@@ -1,0 +1,48 @@
+variables:
+  PREFIX: ajd-
+  APPNAME: web
+  PROJECT_ID: k8s-test-239113
+  CLUSTER: dsr-test
+  ZONE: europe-west2-b
+  VERSION: ${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHORT_SHA}
+  PORT_INT: 80
+  PORT_EXT: 80
+  
+services:
+  - docker:dind
+
+build_docker_image:
+  image: mangothecat/docker-docker-gcpsdk
+  tags:
+    - el7
+  stage: build
+  only:
+    - master
+    - tags
+  script:
+    - docker info
+    - export PATH=$PATH:/root/google-cloud-sdk/bin
+    - gcloud config set project $PROJECT_ID
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+    - docker build -t gcr.io/${PROJECT_ID}/${PREFIX}${APPNAME}:${VERSION} .
+    - docker push gcr.io/${PROJECT_ID}/${PREFIX}${APPNAME}:${VERSION}
+    
+deploy_production:
+  image: google/cloud-sdk:latest
+  stage: deploy
+  tags:
+    - el7
+  environment: Production
+  only:
+    - tags
+    - master
+  script:
+    - apt-get update && apt-get install -y gettext
+    - gcloud config set project $PROJECT_ID
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud container clusters get-credentials $CLUSTER --zone=$ZONE
+    - pushd yaml && for a in *.tml ; do envsubst < $a > $a.yml ; done && popd
+    - kubectl apply -f yaml

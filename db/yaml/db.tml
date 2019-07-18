@@ -1,10 +1,10 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: ajd-db
+  name: ${PREFIX}${APPNAME}
 spec:
   selector:
-    app: ajd-db
+    app: ${PREFIX}${APPNAME}
     tier: backend
   ports:
   - protocol: TCP
@@ -14,24 +14,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ajd-db
+  name: ${PREFIX}${APPNAME}
 spec:
   selector:
     matchLabels:
-      app: ajd-db
+      app: ${PREFIX}${APPNAME}
       tier: backend
       track: stable
   replicas: 1
   template:
     metadata:
       labels:
-        app: ajd-db
+        app: ${PREFIX}${APPNAME}
         tier: backend
         track: stable
     spec:
       containers:
-        - name: ajd-db
-          image: "gcr.io/data-science-radar/ajd-db:v1"
+        - name: ${PREFIX}${APPNAME}
+          image: "gcr.io/${PROJECT_ID}/${PREFIX}${APPNAME}:${VERSION}"
           ports:
             - name: mysql
               containerPort: 3306
