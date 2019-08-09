@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${GATSBY_NAME}
+  labels:
+    app.kubernetes.io/name: ${GATSBY_NAME}
+    app.kubernetes.io/instance: ${GATSBY_NAME}
+    app.kubernetes.io/component: webserver
+    tier: frontend
+    track: ${TRACK}
+spec:
+  selector:
+    app.kubernetes.io/name: ${GATSBY_NAME}
+    app.kubernetes.io/instance: ${GATSBY_NAME}
+    app.kubernetes.io/component: webserver
+    tier: frontend
+    track: ${TRACK}
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${GATSBY_NAME}
+  labels:
+    app.kubernetes.io/name: ${GATSBY_NAME}
+    app.kubernetes.io/instance: ${GATSBY_NAME}
+    app.kubernetes.io/component: webserver
+    tier: frontend
+    track: ${TRACK}
+spec:
+  selector:
+    matchLabels:
+        app.kubernetes.io/name: ${GATSBY_NAME}
+        app.kubernetes.io/instance: ${GATSBY_NAME}
+        app.kubernetes.io/component: webserver
+        tier: frontend
+        track: ${TRACK}
+  replicas: ${GATSBY_REPLICAS}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ${GATSBY_NAME}
+        app.kubernetes.io/instance: ${GATSBY_NAME}
+        app.kubernetes.io/component: webserver
+        tier: frontend
+        track: ${TRACK}
+    spec:
+      containers:
+        - name: ${INGRESS_NAME}
+          image: "gcr.io/${PROJECT_ID}/${GATSBY_NAME}-${GCP_CLUSTER}:${VERSION}"
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: GATSBY_TELEMETRY_DISABLED
+              value: "1"

@@ -1,0 +1,134 @@
+stages:
+  - build
+  - deploy
+  - undeploy
+
+variables:
+   PROD_URL: help.dsradar.com
+   TRACK: production
+   PROJECT_ID: data-science-radar
+   GCP_CLUSTER: prod
+   GCP_CLUSTER_ZONE: europe-west2-b
+   VERSION: ${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+   INGRESS_NAME: help-ingress
+   INGRESS_REPLICAS: 1
+   GATSBY_NAME: help
+
+services:
+  - name: docker:19.03.0-dind
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p "/etc/docker/certs.d/$CI_REGISTRY"
+        apk add openssl
+        openssl s_client -showcerts -connect git.mango.local:443 </dev/null 2>/dev/null|openssl x509 -outform PEM > "/etc/docker/certs.d/$CI_REGISTRY/ca.crt" || exit
+        dockerd-entrypoint.sh || exit
+
+Build Ingress:
+  image: mangothecat/docker-docker-gcpsdk
+  tags:
+    - el7
+  stage: build
+  environment:
+     name: ${PROD_URL}
+     url: ${PROD_URL}
+     on_stop: "Stop Help"
+  before_script:
+    - apk add gettext
+    - docker info
+    - export PATH=$PATH:/root/google-cloud-sdk/bin
+    - gcloud config set project $PROJECT_ID
+    - export GCP_SERVICE_ACCOUNT_KEY=/tmp/$CI_PIPELINE_ID.json
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > $GCP_SERVICE_ACCOUNT_KEY
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+  script:
+    - (cd ingress && docker build -t gcr.io/${PROJECT_ID}/${INGRESS_NAME}-${GCP_CLUSTER}:${VERSION} .)
+    - docker push gcr.io/${PROJECT_ID}/${INGRESS_NAME}-${GCP_CLUSTER}:${VERSION}
+
+Build Gatsby:
+  image: mangothecat/docker-docker-gcpsdk
+  tags:
+    - el7
+  stage: build
+  environment:
+     name: ${PROD_URL}
+     url: ${PROD_URL}
+     on_stop: "Stop Help"
+  before_script:
+    - apk add gettext
+    - docker info
+    - echo $CI_BUILD_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - export PARENT_IMG="$CI_REGISTRY/dsradar/dsr-base/10.15.3_centos7.6.1810:latest"
+    - export PATH=$PATH:/root/google-cloud-sdk/bin
+    - gcloud config set project $PROJECT_ID
+    - export GCP_SERVICE_ACCOUNT_KEY=/tmp/$CI_PIPELINE_ID.json
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > $GCP_SERVICE_ACCOUNT_KEY
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+  script:
+    - docker build --build-arg PARENT_IMG=${PARENT_IMG} -t gcr.io/${PROJECT_ID}/${GATSBY_NAME}-${GCP_CLUSTER}:${VERSION} .
+    - docker push gcr.io/${PROJECT_ID}/${GATSBY_NAME}-${GCP_CLUSTER}:${VERSION}
+
+Deploy Help:
+  image: mangothecat/docker-docker-gcpsdk
+  tags:
+    - el7
+  stage: deploy
+  only:
+    - master
+  environment:
+     name: ${PROD_URL}
+     url: ${PROD_URL}
+     on_stop: "Stop Help"
+  before_script:
+    - apk add gettext
+    - docker info
+    - export PATH=$PATH:/root/google-cloud-sdk/bin
+    - gcloud config set project $PROJECT_ID
+    - export GCP_SERVICE_ACCOUNT_KEY=/tmp/$CI_PIPELINE_ID.json
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > $GCP_SERVICE_ACCOUNT_KEY
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+
+  script:
+    - gcloud container clusters get-credentials ${GCP_CLUSTER} --zone=${GCP_CLUSTER_ZONE}
+    - pushd yaml && for a in *.ymlt ; do envsubst < $a > $a.yml ; done && popd
+    - kubectl apply -f yaml
+  artifacts:
+    name: ${GCP_CLUSTER}-${TRACK}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+    when: always 
+    expire_in: 5 yrs
+    paths:
+      - ./yaml/*.yml
+
+Stop Help:
+  image: mangothecat/docker-docker-gcpsdk
+  tags:
+    - el7
+  stage: undeploy
+  when: manual
+  environment:
+    name: ${PROD_URL}
+    action: stop
+  before_script:
+    - apk add gettext
+    - docker info
+    - export PATH=$PATH:/root/google-cloud-sdk/bin
+    - gcloud config set project $PROJECT_ID
+    - export GCP_SERVICE_ACCOUNT_KEY=/tmp/$CI_PIPELINE_ID.json
+    - echo $K8S_SECRET_SERVICE_ACCOUNT > $GCP_SERVICE_ACCOUNT_KEY
+    - gcloud auth activate-service-account --key-file /tmp/$CI_PIPELINE_ID.json
+    - gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+  script:
+    - gcloud container clusters get-credentials ${GCP_CLUSTER} --zone=${GCP_CLUSTER_ZONE}
+    - pushd yaml && for a in *.ymlt ; do envsubst < $a > $a.yml ; done && popd
+    - kubectl delete -f yaml
+  artifacts:
+    name: ${GCP_CLUSTER}-${TRACK}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
+    when: always
+    expire_in: 5 yrs
+    paths:
+      - ./yaml/*.yml
+
